@@ -23,7 +23,12 @@ class BufferRead(QRunnable):
         for line in range(len(self.buffer)):
             this_buffer += f"{self.buffer[line]}\n"
 
-        buffer = this_buffer.replace("\\\\\n", "\n")
+        buffer = (
+            this_buffer
+            .replace("\\\\\n", "\n")
+            .replace("{{", "{ {")
+            .replace("}}", "} }")
+        )
 
         if last_buffer != this_buffer:
             self.signals.reload.emit(buffer)

@@ -8,7 +8,7 @@ class Cloze:
         self.text = text
         self.back_extra = back_extra
         self.tags = ""
-        self.regex = r"{{c[0-9+]::"
+        self.regex = r"{{c[0-9]+::"
 
         self.before_html = basic_before
         self.between_html = basic_between
@@ -22,7 +22,7 @@ class Cloze:
             .replace("\\)", "\\)</mathjax>")
         )
         while (match := re.search(r"\n - (.+)\n", htmlified_text)) is not None:
-            htmlified_text = htmlified_text.replace(f"{match.group(0)}", f"\n<li>{match.group(0)[4:-1]}</li>\n")
+            htmlified_text = htmlified_text.replace(f"{match.group(0)}", f"\n\n<li>{match.group(0)[4:-1]}</li>\n")
 
         html_text = htmlified_text.split("\n")
         for i in range(len(html_text)):
@@ -35,7 +35,7 @@ class Cloze:
         return f"{self.before_html}{htmlified_text}{self.between_html if self.back_extra != '' else ''}{self.back_extra if self.back_extra != '' else ''}{self.after_html}"
 
     def __str__(self):
-        return f"# Note\nmodel: Cloze\ntags: {self.tags}\n\n## Text\n{self.text}\n\n## Back Extra\n{self.back_extra}\n\n"
+        return f"# Note\nmodel: Cloze\ntags: {self.tags}\n\n## Text\n{self.text}\n\n## Back Extra\n{self.back_extra}\n\n\n"
 
     def __repr__(self):
         return self.__str__()
@@ -59,7 +59,7 @@ class Basic:
         return f"{self.before_html}{htmlified_front}{self.between_html}{htmlified_back}{self.after_html}"
 
     def __str__(self):
-        return f"# Note\nmodel: {self.model}\ntags: {self.tags}\n\n## Front\n{self.front}\n\n## Back\n{self.back}\n\n"
+        return f"# Note\nmodel: {self.model}\ntags: {self.tags}\n\n## Front\n{self.front}\n\n## Back\n{self.back}\n\n\n"
 
     def __repr__(self):
         return self.__str__()
