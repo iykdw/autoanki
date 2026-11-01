@@ -3,12 +3,11 @@ import pathlib
 import random
 import re
 import signal
+import sqlite3
 import subprocess
-import sys
 import tempfile
 from inspect import currentframe, getframeinfo
 from itertools import count
-from typing import Literal
 
 from PySide6.QtCore import QThreadPool, QTimer
 from PySide6.QtGui import QCloseEvent
@@ -22,20 +21,18 @@ from PySide6.QtWidgets import (
 )
 
 from autoanki.editor_interface import BufferRead, BufferWrite
-from autoanki.notes import Basic, Basic_And_Reversed, Cloze
+from autoanki.notes import Basic, BasicAndReversed, Cloze
 
-Note = type[Basic] | type[Basic_And_Reversed] | type[Cloze]
+Note = type[Basic] | type[BasicAndReversed] | type[Cloze]
 NoteObj = Basic | Cloze
 
 
 class NoteGenerator(QWidget):
     def __init__(self) -> None:
         super().__init__()
-        try:
-            self.subject: str = f"{sys.argv[1]}-"
-        except IndexError:
-            self.subject = ""
 
+        self.deck = ""
+        self.subject = ""
         self.note_width: int = 500
         self.note_height = 300
 
@@ -49,7 +46,7 @@ class NoteGenerator(QWidget):
         self.temp_file_name: str = self.temp_file.name
         self.buffer = "\n"
         self.last_buffer = ""
-        self.displaying: Literal["all"] | int = "all"
+        self.displaying: int = -1
 
         self.layout: QVBoxLayout = QVBoxLayout()
         self.margins: list[int] = [10, 10, 10, 10]  # left, top, right, bottom
@@ -185,29 +182,93 @@ class NoteGenerator(QWidget):
 
         return formulae
 
+    def get_nids_in_file(self) -> list[str]:
+        with pathlib.Path(self.output_file).open("r") as f:
+            notes = f.read()
+            nids: list[str] = []
+            nids = [
+                line[4:].strip() for line in notes.split("\n") if line.startswith("nid")
+            ]
+
+        return nids
+
     def closeEvent(self, _: QCloseEvent) -> None:
-        self.threadpool.start(BufferWrite().buffer_write(""))
-        self.temp_output_file.seek(0)
-        notes = self.temp_output_file.read().decode("utf-8")
-        if not notes.replace("\n", "").strip():
+        if self.buffer.replace("\n", "").strip():
             with pathlib.Path(self.output_file).open("a") as f:
-                f.write(notes)
+                for note in self.notes:
+                    f.write(str(note))
+
+            print(f"{getframeinfo(currentframe()).lineno} {self.output_file=}")
+            subprocess.run([
+                "apy",
+                "update-from-file",
+                "-d",
+                self.deck,
+                "-u",
+                self.output_file,
+            ])
+
+            print(f"{getframeinfo(currentframe()).lineno} no notes!")
+
+            after_nids = self.get_nids_in_file()
+            num_nids = len(self.notes)
+            for i, nid in enumerate(after_nids[-num_nids:]):
+                self.notes[i].nid = nid
+
+            with sqlite3.connect("notes.db") as conn:
+                c = conn.cursor()
+                c.execute(
+                    """INSERT INTO buffers(buffer, subject, deck) VALUES (?, ?, ?)""",
+                    (self.buffer, self.subject, self.deck),
+                )
+                buffer_id = c.lastrowid
+                for note in self.notes:
+                    if isinstance(note, Basic):
+                        c.execute(
+                            """INSERT INTO basic VALUES (?, ?, ?, ?, ?, ?)""",
+                            (
+                                note.nid,
+                                self.deck,
+                                note.tags,
+                                note.front,
+                                note.back,
+                                buffer_id,
+                            ),
+                        )
+                    elif isinstance(note, Cloze):
+                        c.execute(
+                            """INSERT INTO cloze VALUES(?, ?, ?, ?, ?, ?)""",
+                            (
+                                note.nid,
+                                self.deck,
+                                note.tags,
+                                note.text,
+                                note.back_extra,
+                                buffer_id,
+                            ),
+                        )
+                    else:
+                        print(f"{getframeinfo(currentframe()).lineno} {type(note)=}")
+            conn.close()
 
         os.kill(self.editor.pid, signal.SIGINT)
 
 
 class SingleBasic(NoteGenerator):
-    def __init__(self) -> None:
+    def __init__(self, deck: str) -> None:
         super().__init__()
         self.name = "Basic Note"
         self.setWindowTitle(self.name)
-        if not self.output_file:
-            self.output_file = "basic-notes.md"
+        self.deck = deck
+        self.output_file = (
+            f"{self.deck.split('::')[-1].lower().replace(' ', '-')}-basic-notes.md"
+        )
         self.template = ""
 
         self.set_number_of_notes([(1, Basic)])
         self.switch_web_view("all")
         self.notes: list[Basic]
+        self.threadpool.start(BufferWrite().buffer_write(self.template))
 
     def update_web_view(self, buffer: str) -> None:
         if buffer == self.buffer:
@@ -218,8 +279,9 @@ class SingleBasic(NoteGenerator):
 
         buffer = buffer.replace("<mathjax>", "").replace("</mathjax>", "")
         bl = buffer.split("\n")
-        if len(bl) >= 2:
+        if len(bl) > 1:
             front = bl[0]
+            self.subject = front
             back = bl[1]
             if self.notes[0].front != front or self.notes[0].back != back:
                 self.notes[0].front = front
@@ -231,65 +293,16 @@ class SingleBasic(NoteGenerator):
                 self.temp_output_file.write(str(note).encode("utf-8"))
 
 
-class MathsIdentity(NoteGenerator):
-    def __init__(self) -> None:
-        super().__init__()
-        self.name = "Maths Identity"
-        self.setWindowTitle(self.name)
-        if not self.output_file:
-            self.output_file = "maths-identities.md"
-        self.template = "anki-maths-identity"
-        self.min_redraw_lines = 5
-        self.notes: list[Basic]
-
-        self.set_number_of_notes([(2, Basic)])
-        self.switch_web_view("all")
-
-        text_button = QPushButton("Text card")
-        text_button.pressed.connect(lambda: self.switch_web_view(0))
-        self.tabButtons.addWidget(text_button)
-
-        tex_button = QPushButton("Tex card")
-        tex_button.pressed.connect(lambda: self.switch_web_view(1))
-        self.tabButtons.addWidget(tex_button)
-
-    def update_web_view(self, buffer: str) -> None:
-        if buffer == self.buffer:
-            return
-
-        if self.displaying == -1:
-            self.buffer = buffer
-
-        bl = buffer.split("\n")
-        if len(bl) > 1:
-            note_0 = self.notes[0]
-            note_0_front = f"{bl[0]} {bl[1]} {bl[2]}"
-            note_01_back = bl[3]
-            if note_0.front != note_0_front or note_0.back != note_01_back:
-                note_0.front = note_0_front
-                note_0.back = note_01_back
-                self.web_views[0].setHtml(note_0.html())
-            note_1 = self.notes[1]
-            note_1_front = f"{bl[4]} {bl[1]} {bl[5]}"
-            if note_1.front != note_1_front or note_1.back != note_01_back:
-                note_1.front = note_1_front
-                note_1.back = note_01_back
-                self.web_views[1].setHtml(note_1.html())
-
-            self.temp_output_file.seek(0)
-            for note in self.notes:
-                self.temp_output_file.write(str(note).encode("utf-8"))
-
-
 class Definition(NoteGenerator):
-    def __init__(self) -> None:
+    def __init__(self, deck: str) -> None:
         super().__init__()
         self.name = "Definition"
         self.setWindowTitle(self.name)
-        self.output_file = f"{self.subject}definitions.md"
+        self.deck = deck
+        self.output_file = f"{deck.rsplit('::', maxsplit=1)[-1].lower().replace(' ', '-')}-definitions.md"
         self.template = "anki-definition"
 
-        self.base_notes: list[tuple[int, Note]] = [(2, Cloze), (1, Basic_And_Reversed)]
+        self.base_notes: list[tuple[int, Note]] = [(2, Cloze), (1, BasicAndReversed)]
         self.set_number_of_notes(self.base_notes)
         self.switch_web_view("all")
 
@@ -309,6 +322,7 @@ class Definition(NoteGenerator):
         )
         self.buttons.append(formula_basic_and_reversed_button)
         self.tabButtons.addWidget(formula_basic_and_reversed_button)
+        self.threadpool.start(BufferWrite().buffer_write(self.template))
 
     @staticmethod
     def update_cloze(bl: list[str], note: Cloze) -> None:
@@ -343,6 +357,7 @@ class Definition(NoteGenerator):
             self.update_basic(bl, note)
 
     def update_web_view(self, buffer: str):
+        print(f"{getframeinfo(currentframe()).lineno} {self.output_file=}")
         if buffer == self.buffer + "\n" or buffer[:-2] == self.last_buffer + "\n":
             return
 
@@ -350,8 +365,6 @@ class Definition(NoteGenerator):
 
         if self.displaying == -1:
             self.buffer = buffer
-
-        print(f"{getframeinfo(currentframe()).lineno} {self.displaying=}")
 
         bl = buffer.split("\n")
         if self.displaying >= 0:
@@ -380,6 +393,7 @@ class Definition(NoteGenerator):
                 match i:
                     case 0:
                         subject = line
+                        self.subject = subject
                     case 1:
                         context = f"In [{line}], " if line != "" else ""
                     case 2:
@@ -417,7 +431,6 @@ class Definition(NoteGenerator):
                             ])
 
             newbuf = self.buffer.replace("\n\n", "\n").split("\n========\n")
-            print(f"{getframeinfo(currentframe()).lineno} {newbuf=}")
 
             syms_per_buf = [
                 "\n".join([line for line in buf.split("\n")[1:] if line])
@@ -438,11 +451,7 @@ class Definition(NoteGenerator):
                 except IndexError:
                     newbuf.append(f"\\({eqn}\\)\n{'\n'.join(equation_symbol_lines)}")
 
-            print(f"{getframeinfo(currentframe()).lineno} {newbuf=}")
-
             newbufstr = "\n========\n".join(newbuf)
-            print(f"{getframeinfo(currentframe()).lineno} {buffer=}")
-            print(f"{getframeinfo(currentframe()).lineno} {self.buffer=}")
             if buffer == self.buffer:
                 self.buffer = newbufstr
                 self.threadpool.start(BufferWrite().buffer_write(newbufstr))
@@ -465,7 +474,7 @@ class Definition(NoteGenerator):
 
             if adding_notes > 0:
                 for _ in range(adding_notes):
-                    self.add_notes([[1, Cloze], [1, Basic_And_Reversed]])
+                    self.add_notes([[1, Cloze], [1, BasicAndReversed]])
 
                     for button in self.buttons[1:]:
                         try:
@@ -572,14 +581,15 @@ class Definition(NoteGenerator):
 
 
 class Equation(NoteGenerator):
-    def __init__(self):
+    def __init__(self, deck: str) -> None:
         super().__init__()
         self.name = "Equation"
         self.setWindowTitle(self.name)
-        self.output_file = f"{self.subject}equations.md"
+        self.deck = deck
+        self.output_file = f"{deck.rsplit('::', maxsplit=1)[-1].lower().replace(' ', '-')}-equations.md"
         self.template = "anki-equation"
 
-        self.set_number_of_notes([[1, Cloze], [1, Basic_And_Reversed]])
+        self.set_number_of_notes([[1, Cloze], [1, BasicAndReversed]])
         self.switch_web_view("all")
 
         formula_cloze_button = QPushButton("Formula Cloze")
@@ -591,6 +601,7 @@ class Equation(NoteGenerator):
             lambda: self.switch_web_view(1)
         )
         self.tabButtons.addWidget(formula_basic_and_reversed_button)
+        self.threadpool.start(BufferWrite().buffer_write(self.template))
 
     def update_web_view(self, buffer: str):
         if buffer == self.buffer or buffer == self.last_buffer:
@@ -647,6 +658,7 @@ class Equation(NoteGenerator):
                 match i:
                     case 0:
                         subject = line
+                        self.subject = subject
                     case 1:
                         context = f"In [{line}], " if line != "" else ""
                     case 2:
