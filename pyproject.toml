@@ -1,0 +1,74 @@
+[project]
+name = "autoanki"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Yasha Duncan-Wilson", email = "yasha@duncan-wilson.co.uk" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "marko>=2.2.5",
+    "pynvim>=0.6.0",
+    "pyside6>=6.12.0",
+    "thefuzz>=0.22.1",
+]
+
+[project.scripts]
+autoanki = "autoanki:main"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+indent-width = 4
+fix = true
+show-fixes = true
+preview = true  # Enable preview rules (PLR1702, etc.)
+
+[tool.ruff.lint]
+# Comprehensive rule set for strict checking
+select = [
+    "E",        # pycodestyle errors
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "BLE",      # flake8-blind-except (no bare except:)
+    "C4",       # flake8-comprehensions
+    "C90",      # mccabe complexity
+    "T20",      # flake8-print (no print statements)
+    "SIM",      # flake8-simplify
+    "N",        # pep8-naming
+    "Q",        # flake8-quotes
+    "RUF",      # Ruff-specific rules
+    "ASYNC",    # flake8-async
+    "S",        # flake8-bandit (security)
+    "PTH",      # flake8-use-pathlib
+    "ERA",      # eradicate (commented-out code)
+    "PL",       # pylint (includes PLR1702: too-many-nested-blocks)
+    "PERF",     # perflint (performance)
+    "ANN",      # flake8-annotations
+    "ARG",      # flake8-unused-arguments
+    "FBT",      # flake8-boolean-trap (no boolean positional args)
+    "RET",      # flake8-return
+    "TCH",      # flake8-type-checking
+]
+
+ignore = [
+    "E501",     # Line too long (formatter handles this)
+    "S603",     # subprocess without shell=True (too strict)
+    "S607",     # Starting a process with a partial path (too strict)
+    "PLR2004",  # Magic value used in comparison
+    "RUF067",   # Non empty init module
+]
+
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
