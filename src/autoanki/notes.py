@@ -5,16 +5,24 @@ from autoanki.note_html import basic_after, basic_before, basic_between
 
 class Cloze:
     def __init__(self, text: str = "", back_extra: str = "") -> None:
+<<<<<<< HEAD
         self._text: str = text
         self._back_extra: str = back_extra
         self.tags: str = ""
         self._nid: int = -1
+=======
+        self.text = text
+        self.back_extra = back_extra
+        self.tags = ""
+        self.nid = ""
+>>>>>>> 0fb7023a17462d82fd66c604fd794bd7892deac9
         self.regex = r"{{c[0-9]+::"
 
         self.before_html = basic_before
         self.between_html = basic_between
         self.after_html = basic_after
 
+<<<<<<< HEAD
     @property
     def nid(self) -> int:
         return self._nid
@@ -45,6 +53,20 @@ class Cloze:
         htmlified_text = re.sub(self.regex, r"<span style='color: blue'>", self.text).replace("}}", "</span>").replace("\\(", "<mathjax>\\(").replace("\\)", "\\)</mathjax>")
         while (match := re.search(r"\n - (.+)\n", htmlified_text)) is not None:
             htmlified_text = htmlified_text.replace(f"{match.group(0)}", f"\n\n<li>{match.group(0)[4:-1]}</li>\n")
+=======
+    def html(self) -> str:
+        htmlified_text = (
+            re
+            .sub(self.regex, r"<span style='color: blue'>", self.text)
+            .replace("}}", "</span>")
+            .replace("\\(", "<mathjax>\\(")
+            .replace("\\)", "\\)</mathjax>")
+        )
+        while (match := re.search(r"\n - (.+)\n", htmlified_text)) is not None:
+            htmlified_text = htmlified_text.replace(
+                f"{match.group(0)}", f"\n\n<li>{match.group(0)[4:-1]}</li>\n"
+            )
+>>>>>>> 0fb7023a17462d82fd66c604fd794bd7892deac9
 
         html_text = htmlified_text.split("\n")
         for i in range(len(html_text)):
@@ -57,7 +79,11 @@ class Cloze:
         return f"{self.before_html}{htmlified_text}{self.between_html if self.back_extra else ''}{self.back_extra if self.back_extra else ''}{self.after_html}"
 
     def __str__(self) -> str:
+<<<<<<< HEAD
         return f"# Note\nmodel: Cloze\ntags: {self.tags}\n{f'nid: {self.nid}\n' if self.nid > 0 else ''}\n## Text\n{self.text}\n\n## Back Extra\n{self.back_extra}\n\n\n"
+=======
+        return f"# Note\nmodel: Cloze\ntags: {self.tags}\n{f'nid: {self.nid}\n' if self.nid else ''}\n## Text\n{self.text}\n\n## Back Extra\n{self.back_extra}\n\n\n"
+>>>>>>> 0fb7023a17462d82fd66c604fd794bd7892deac9
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -65,10 +91,17 @@ class Cloze:
 
 class Basic:
     def __init__(self, front: str = "", back: str = "") -> None:
+<<<<<<< HEAD
         self._front = front
         self._back = back
         self.tags = ""
         self._nid = -1
+=======
+        self.front = front
+        self.back = back
+        self.tags = ""
+        self.nid = ""
+>>>>>>> 0fb7023a17462d82fd66c604fd794bd7892deac9
 
         self.model = "Basic"
 
@@ -76,6 +109,7 @@ class Basic:
         self.between_html = basic_between
         self.after_html = basic_after
 
+<<<<<<< HEAD
     @property
     def nid(self) -> int:
         return self._nid
@@ -109,6 +143,19 @@ class Basic:
 
     def __str__(self) -> str:
         return f"# Note\nmodel: {self.model}\ntags: {self.tags}\n{f'nid: {self.nid}\n' if self.nid > 0 else ''}\n\n## Front\n{self.front}\n\n## Back\n{self.back}\n\n\n"
+=======
+    def html(self) -> str:
+        htmlified_front = self.front.replace("\\(", "<mathjax>\\(").replace(
+            "\\)", "\\)</mathjax>"
+        )
+        htmlified_back = self.back.replace("\\(", "<mathjax>\\(").replace(
+            "\\)", "\\)</mathjax>"
+        )
+        return f"{self.before_html}{htmlified_front}{self.between_html}{htmlified_back}{self.after_html}"
+
+    def __str__(self) -> str:
+        return f"# Note\nmodel: {self.model}\ntags: {self.tags}\n{f'nid: {self.nid}\n' if self.nid else ''}\n\n## Front\n{self.front}\n\n## Back\n{self.back}\n\n\n"
+>>>>>>> 0fb7023a17462d82fd66c604fd794bd7892deac9
 
     def __repr__(self) -> str:
         return self.__str__()

@@ -22,10 +22,6 @@ def main() -> None:
             """CREATE TABLE IF NOT EXISTS cloze(nid INTEGER PRIMARY KEY CHECK(nid>0), deck TEXT, tags TEXT, text TEXT, back_extra TEXT, i INTEGER NOT NULL, buffer_id INTEGER NOT NULL, FOREIGN KEY (buffer_id) REFERENCES buffers(id))"""
         )
         c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS cloze_buf_i ON cloze(i, buffer_id)""")
-        # res = c.execute("""SELECT buffer FROM buffers""").fetchall()
-        # for re in res:
-        #    print(re)
-        #    print()
     conn.close()
 
     app = QApplication(sys.argv)
