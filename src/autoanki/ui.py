@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from thefuzz import process
 
 from autoanki.apy_interface import get_decks
-from autoanki.note_generators import Definition, Equation, SingleBasic, SingleBnR
+from autoanki.note_generators import Definition, Equation, SingleBasic, SingleBnR, SingleCloze
 from autoanki.notes import Basic, BasicAndReversed, Cloze
 
 
@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
         self.note_generators = {
             "Basic note": SingleBasic,
             "Basic (and reversed) note": SingleBnR,
+            "Cloze note": SingleCloze,
             "Definition": Definition,
             "Equation": Equation,
         }
@@ -176,7 +177,6 @@ class EditNotesUI(QWidget):
             clozes = c.execute("""SELECT * FROM cloze WHERE buffer_id = ?""", (buffer.id,)).fetchall()
             for cloze in clozes:
                 note = Cloze(text=cloze[3].strip(), back_extra=cloze[4].strip())
-                print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {cloze=}")
                 note.nid = cloze[0]
                 note.tags = cloze[2]
                 notes[cloze[5]] = note
@@ -229,4 +229,5 @@ class EditNotesUI(QWidget):
         self.resize(window_width, window_height)
 
     def open_new_buf(self, buffer: Buffer) -> None:
+        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {buffer.buf_type=}")
         buffer.buf_type(self.deck, id=buffer.id, buffer=buffer.buffer, notes=self.curr_buf_notes).show()

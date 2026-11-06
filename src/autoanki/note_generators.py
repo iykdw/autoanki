@@ -88,8 +88,14 @@ class NoteGenerator(QWidget):
         old_note = copy.deepcopy(note)
         note.text = ""
         note.back_extra = ""
-        if not [line for line in bl if line.startswith("nid:")]:
-            note.nid = -1
+        for line in bl:
+            if line.startswith("nid:"):
+                if line.strip() == "nid:":
+                    note.nid = -1
+                else:
+                    note.nid = line[4:].strip()
+                break
+
         for i in range(len(bl[1:])):
             if bl[i].replace(" ", "") == "##Text":
                 for line in bl[i + 1 :]:
@@ -107,8 +113,15 @@ class NoteGenerator(QWidget):
         old_note = copy.deepcopy(note)
         note.front = ""
         note.back = ""
-        if not [line for line in bl if line.startswith("nid:")]:
-            note.nid = -1
+        for line in bl:
+            if line.startswith("nid:"):
+                if line.strip() == "nid:":
+                    note.nid = -1
+                else:
+                    note.nid = line[4:].strip()
+
+                break
+
         for i in range(len(bl[1:])):
             if bl[i].replace(" ", "") == "##Front":
                 for line in bl[i + 1 :]:
@@ -171,6 +184,7 @@ class NoteGenerator(QWidget):
 
     def create_and_write_new_buffer_contents(self, equations: list[str], equation_symbol_lines: list[str]) -> list[str]:
         newbuf = self.buffer.replace("\n\n", "\n").split("\n========\n")
+        newbuf[0] += "\n\n"
 
         syms_per_buf = ["\n".join([line for line in buf.split("\n")[1:] if line]) for buf in newbuf[1:]]
         main_syms = len(set(syms_per_buf)) == 1
@@ -185,33 +199,31 @@ class NoteGenerator(QWidget):
                 newbuf.append(f"\\({eqn}\\)\n{'\n'.join(equation_symbol_lines)}")
 
         newbufstr = "\n========\n".join(newbuf).strip("\n")
-        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {len(newbuf)=}")
         if self.displaying == -1:
             self.buffer = newbufstr
             self.threadpool.start(BufferWrite().buffer_write(newbufstr))
 
         return newbuf
 
-    def check_number_of_notes_is_correct(self, equations: list[str]) -> None:
-        right_notes_length = 1 + (len(equations) * 2)
+    def check_number_of_notes_is_correct(self, num_base_notes: int, equations: list[str]) -> None:
+        right_notes_length = num_base_notes + (len(equations) * 2)
         adding_notes = int((right_notes_length - len(self.notes)) / 2)
-        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {adding_notes=}")
 
         if adding_notes > 0:
             for _ in range(adding_notes):
                 self.add_notes([[1, Cloze], [1, BasicAndReversed]])
+                pair_num = itertools.count(int(len(self.notes) - num_base_notes) / 2)
 
-                for i in range(1, int(adding_notes / 2), 2):
-                    pair_num = int((len(self.notes) - 1) / 2) + 1
-                    button = QPushButton(f"Cloze {pair_num}")
-                    button.pressed.connect(partial(self.switch_note_display, i))
-                    self.buttons.append(button)
-                    self.tabButtons.addWidget(button)
+                this_pair_num = next(pair_num)
+                button = QPushButton(f"Cloze {this_pair_num}")
+                button.pressed.connect(partial(self.switch_note_display, len(self.notes) - 2))
+                self.buttons.append(button)
+                self.tabButtons.addWidget(button)
 
-                    button = QPushButton(f"BnR {pair_num}")
-                    button.pressed.connect(partial(self.switch_note_display, i + 1))
-                    self.buttons.append(button)
-                    self.tabButtons.addWidget(button)
+                button = QPushButton(f"BnR {this_pair_num}")
+                button.pressed.connect(partial(self.switch_note_display, len(self.notes) - 1))
+                self.buttons.append(button)
+                self.tabButtons.addWidget(button)
 
         elif adding_notes < 0:
             while adding_notes < 0:
@@ -220,10 +232,10 @@ class NoteGenerator(QWidget):
                 last = self.tabButtons.itemAt(self.tabButtons.count() - 1)
                 del last
 
-    def set_content_of_equation_note_pairs(self, start_index: int, newbuf: list[str], equations: list[str]) -> None:
-        for i in range(start_index, len(self.notes[start_index:]), 2):
-            eqn_no = int((i + 1) / 2)
-            bufseg = newbuf[eqn_no]
+    def set_content_of_equation_note_pairs(self, notes_start_index: int, newbuf: list[str], equations: list[str]) -> None:
+        self.check_number_of_notes_is_correct(notes_start_index, equations)
+        for i, eqn in enumerate(equations):
+            bufseg = newbuf[i + 1]
             bufseg_lines = bufseg.split("\n")
             eqn = bufseg_lines[0]
             eqn_str = f" {'is' if len(equations) == 1 else 'can be'} given by {eqn}"
@@ -267,14 +279,16 @@ class NoteGenerator(QWidget):
                     "{{c" + str(next(c)) + f"::{match.group(0)[1:-1]}" + "}}",
                 )
 
-            equation_cloze = self.notes[i]
+            cloze_index = notes_start_index + (2 * i)
+            bnr_index = cloze_index + 1
+            equation_cloze = self.notes[cloze_index]
             if equation_cloze.text != equation_cloze_text:
-                self.notes[i] = Cloze(equation_cloze_text)
+                self.notes[cloze_index] = Cloze(equation_cloze_text)
 
             equation_bnr_front = f"{self.subject} {self.symbol}, given {equation_bnr_symbol_string}."
             equation_bnr_front = self.capitalise(equation_bnr_front)
 
-            equation_bnr = self.notes[i + 1]
+            equation_bnr = self.notes[bnr_index]
             if equation_bnr.front != equation_bnr_front or equation_bnr.back != eqn:
                 equation_bnr.front = equation_bnr_front
                 equation_bnr.back = eqn
@@ -298,7 +312,7 @@ class NoteGenerator(QWidget):
 
     def switch_note_display(self, notes: int) -> None:
         self.displaying: int = notes
-        if notes == -1:
+        if self.displaying == -1:
             notes_to_show: list[NoteObj] = self.notes
             self.threadpool.start(BufferWrite().buffer_write(self.buffer))
             notes_len: int = len(notes_to_show)
@@ -390,15 +404,10 @@ class NoteGenerator(QWidget):
                     note_str = f.read()
 
                 notesplit = note_str.split("\n")
-                print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {notesplit=}")
                 nidlines = [line[4:].strip() for line in notesplit if line.startswith("nid")]
-                print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {nidlines=}")
 
                 note.nid = nidlines[0]
-                print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {note.nid=}")
                 if note.nid < 0:
-                    print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {note_str=}")
-                    print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {note=}")
                     raise ValueError
 
             with sqlite3.connect("notes.db") as conn:
@@ -418,7 +427,7 @@ class NoteGenerator(QWidget):
 
                     buffer_id = c.lastrowid
                     for i, note in enumerate(self.notes):
-                        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {i=} {note.nid=}")
+                        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {i=} {type(note)=}")
                         if isinstance(note, BasicAndReversed):
                             c.execute(
                                 """INSERT OR REPLACE INTO basicandreversed VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -482,17 +491,12 @@ class SingleBasic(NoteGenerator):
 
         if notes:
             self.notes = notes
-            for _ in range(len(notes)):
-                wv = QWebEngineView()
-                self.web_views.append(wv)
-                self.note_display_grid.addWidget(wv)
         else:
             self.set_number_of_notes([(1, Basic)])
 
         self.name = "Basic Note"
         self.setWindowTitle(self.name)
         self.deck = deck
-        self.output_file = f"{self.deck.split('::')[-1].lower().replace(' ', '-')}-basic-notes.md"
 
         self.switch_note_display(-1)
 
@@ -526,11 +530,54 @@ class SingleBnR(SingleBasic):
 
         if notes:
             self.notes = notes
-            wv = QWebEngineView()
-            self.web_views.append(wv)
-            self.note_display_grid.addWidget(wv)
         else:
             self.set_number_of_notes([(1, BasicAndReversed)])
+
+
+class SingleCloze(NoteGenerator):
+    def __init__(self, deck: str, id: int = -1, buffer: str = "", notes=[]) -> None:
+        super().__init__()
+        self.notes: list[Cloze]
+        if id != -1:
+            self.id = id
+
+        if buffer:
+            self.buffer = buffer
+        else:
+            self.buffer = ""
+
+        if notes:
+            self.notes = notes
+        else:
+            self.set_number_of_notes([(1, Cloze)])
+
+        self.name = "Cloze Note"
+        self.setWindowTitle(self.name)
+        self.deck = deck
+
+        self.switch_note_display(-1)
+
+    def update_web_view(self, buffer: str) -> None:
+        if buffer == self.buffer + "\n":
+            return
+
+        buffer = buffer.replace("<mathjax>", "").replace("</mathjax>", "")
+        note = self.notes[0]
+
+        self.buffer = buffer
+
+        text = buffer
+        self.subject = text
+        c = count(1)
+        while (match := re.search(r"\[([^\]]+)\]", text)) is not None:
+            text = text.replace(
+                f"{match.group(0)}",
+                "{{c" + str(next(c)) + f"::{match.group(0)[1:-1]}" + "}}",
+            )
+
+        if note.text != text:
+            note.text = text
+            self.switch_note_display(-1)
 
 
 class Definition(NoteGenerator):
@@ -550,7 +597,6 @@ class Definition(NoteGenerator):
             note_types = [type(note) for note in notes]
 
             if exp_note_types == note_types:
-                print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() Given notes, and the notes are good.")
                 self.notes = notes
                 num_card_pairs = itertools.count(1)
 
@@ -621,7 +667,6 @@ class Definition(NoteGenerator):
         equations, equation_symbol_lines = self.parse_user_segment_of_buffer(8, buffer.split("========")[0])
         self.assemble_summary_cloze(bl[:8])
         newbuf = self.create_and_write_new_buffer_contents(equations, equation_symbol_lines)
-        self.check_number_of_notes_is_correct(equations)
         self.set_content_of_equation_note_pairs(1, newbuf, equations)
         self.switch_note_display(-1)
 
@@ -666,7 +711,6 @@ class Equation(NoteGenerator):
             self.set_default_notes()
 
         self.switch_note_display(-1)
-        self.threadpool.start(BufferWrite().buffer_write(self.buffer))
 
     def set_default_notes(self) -> None:
         self.set_number_of_notes([[1, Cloze], [1, BasicAndReversed]])
@@ -694,8 +738,6 @@ class Equation(NoteGenerator):
         self.buffer = buffer
         buffer = buffer.replace("{{", "{ {").replace("}}", "} }")
         equations, equation_symbol_lines = self.parse_user_segment_of_buffer(6, buffer.split("========")[0])
-        print(f"{__file__}:{getframeinfo(currentframe()).lineno} {stack()[0][3]}() {equations=}")
-        equation_raw_data = [f"\\({equation}\\)\n{'\n'.join(equation_symbol_lines)}" for equation in equations]
-
-        self.set_content_of_equation_note_pairs(0, equation_raw_data, equations)
+        newbuf = self.create_and_write_new_buffer_contents(equations, equation_symbol_lines)
+        self.set_content_of_equation_note_pairs(0, newbuf, equations)
         self.switch_note_display(-1)
