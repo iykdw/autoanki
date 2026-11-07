@@ -23,12 +23,7 @@ class BufferRead(QRunnable):
         for line in range(len(self.buffer)):
             this_buffer += f"{self.buffer[line]}\n"
 
-        buffer = (
-            this_buffer
-            .replace("\\\\\n", "\n")
-            .replace("{{", "{ {")
-            .replace("}}", "} }")
-        )
+        buffer = this_buffer.replace("\\\\\n", "\n")
 
         if last_buffer != this_buffer:
             self.signals.reload.emit(buffer)
@@ -45,4 +40,4 @@ class BufferWrite(QRunnable):
         except:
             return
 
-        nvim.current.buffer[:] = buffer.split("\n")
+        nvim.current.buffer[:] = buffer.rstrip("\n").split("\n")

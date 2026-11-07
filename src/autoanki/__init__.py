@@ -1,39 +1,30 @@
+import sqlite3
 import sys
 
-from PySide6.QtWidgets import QApplication, QComboBox, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication
 
-from autoanki.note_generators import Definition, Equation, MathsIdentity, SingleBasic
-
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("MainWindow")
-
-        self.note_generators = {"Basic Note": SingleBasic, "Maths Identity": MathsIdentity, "Definition": Definition, "Equation": Equation}
-
-        self.note_type = QComboBox()
-        for gen in self.note_generators:
-            self.note_type.addItem(gen)
-
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.note_type)
-
-        button = QPushButton("Create")
-        button.clicked.connect(lambda: self.note_generators[self.note_type.currentText()]().show())
-
-        self.layout.addWidget(button)
-
-        cw = QWidget()
-        cw.setLayout(self.layout)
-        self.setCentralWidget(cw)
+from autoanki.ui import MainWindow
 
 
-def main():
+def main() -> None:
+    with sqlite3.connect("notes.db") as conn:
+        c = conn.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS buffers (id INTEGER, buffer TEXT, type TEXT, deck TEXT, PRIMARY KEY(id AUTOINCREMENT))""")
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS basic(nid INTEGER CHECK(nid > 0) PRIMARY KEY, deck TEXT, tags TEXT, front TEXT, back TEXT, i INTEGER NOT NULL, buffer_id INTEGER NOT NULL, FOREIGN KEY(buffer_id) REFERENCES buffers(id))"""
+        )
+        c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS basic_buf_i ON basic(i, buffer_id)""")
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS basicandreversed(nid INTEGER PRIMARY KEY CHECK(nid > 0), deck TEXT, tags TEXT, front TEXT, back TEXT, i INTEGER NOT NULL, buffer_id INTEGER NOT NULL, FOREIGN KEY(buffer_id) REFERENCES buffers(id))"""
+        )
+        c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS bnr_buf_i ON basicandreversed(i, buffer_id)""")
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS cloze(nid INTEGER PRIMARY KEY CHECK(nid>0), deck TEXT, tags TEXT, text TEXT, back_extra TEXT, i INTEGER NOT NULL, buffer_id INTEGER NOT NULL, FOREIGN KEY (buffer_id) REFERENCES buffers(id))"""
+        )
+        c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS cloze_buf_i ON cloze(i, buffer_id)""")
+    conn.close()
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     app.exec()
-
-    with open("temp.tex", "w") as f:
-        f.write("anki-maths-identity")
